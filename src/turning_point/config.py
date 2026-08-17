@@ -24,11 +24,11 @@ class ModelConfig:
     Lower temperature + constrained sampling = precise function calls.
     """
 
-    model: str = "gemma4:e4b"
+    model: str = "gemma4:e2b"
     temperature: float = 0.2
     top_p: float = 0.85
     top_k: int = 40
-    num_ctx: int = 8192
+    num_ctx: int = 16384
     num_predict: int = 2048
     repeat_penalty: float = 1.1
     seed: int | None = None
@@ -81,7 +81,7 @@ def load_config() -> AppConfig:
     Raises:
         RuntimeError: If SOLACE_API_TOKEN is not set.
     """
-    solace_token = os.getenv("SOLACE_API_TOKEN", "")
+    solace_token = os.getenv("SOLACE_API_TOKEN")
     if not solace_token:
         raise RuntimeError(
             "SOLACE_API_TOKEN is not set. "
