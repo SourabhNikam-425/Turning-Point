@@ -6,33 +6,21 @@
 
 ---
 
-## Phase 1: Core Integration
+## Phase 1 & 2: Multi-MCP Server & Tool Optimization Integration
 
 | Task | Status | Note |
 | :--- | :--- | :--- |
 | Choose open-weight LLM | Done | Selected Gemma 4 (`gemma4:e4b`) via Ollama |
 | Connect Gemma 4 to Ollama | Done | Gemma 4 successfully responds at `http://localhost:11434` |
 | Gemma 4 tool/function calling | Done | Generates structured tool calls using Ollama function-calling format |
-| Clone/setup Solace MCP | Done | Repository + `uvx` + dependencies working (`solace-event-portal-designer-mcp`) |
-| Authenticate with Solace | Done | `SOLACE_API_TOKEN` works, loaded from `.env` |
-| MCP server startup | Done | FastMCP EP Designer API starts via `uvx` stdio transport |
-| MCP client to MCP server | Done | MCP session initialized (`ClientSession` + `initialize()` confirmed) |
-| Discover Solace tools | Done | 35+ Event Portal tools discovered at runtime |
-| Execute Event Portal tool | Done | `getApplicationDomains` executed successfully, valid response returned |
-| Receive Event Portal response | Done | Valid response, `isError=False`, text content extracted correctly |
-| Gemma 4 to MCP to Event Portal | Done | End-to-end API calling pipeline working; natural language query triggers correct tool execution |
+| Clone/setup Solace MCP | Done | `solace-event-portal-designer-mcp` + `solace-monitoring-mcp-server` configured |
+| Authenticate with Solace | Done | `SOLACE_API_TOKEN` and SEMPv2 credentials configured in `.env` |
+| Multi-MCP server startup | Done | Concurrently launches Event Portal Designer and PubSub+ Monitoring MCP servers |
+| Multi-MCP client manager | Done | `MultiServerSessionManager` handles concurrent stdio sessions & tool routing |
+| Discover Solace tools | Done | 260+ tools discovered across Event Portal & SEMPv2 broker monitoring |
+| Dynamic Tool Selection Optimization Layer | Done | `tool_selector.py` dynamically filters top 20-30 tools per query to keep prompt lean |
+| Execute Solace MCP tool | Done | End-to-end tool discovery, prompt filtering, and execution working |
 
----
-
-## Phase 2: Event Mutation Capabilities
-
-| Task | Status | Note |
-| :--- | :--- | :--- |
-| Gemma 4 receives MCP result and generates final answer | In Progress | Basic read operations demonstrated; structured answer formatting in progress |
-| Create/update/delete events via Gemma 4 | Not Started | Gemma 4 does not reliably generate correct mutation calls (createEvent, updateEvent, deleteEvent) - see Known Limitation below |
-| Schema mutation operations | Not Started | `createSchema`, `updateSchema`, `deleteSchema` tools exist in MCP but not yet exercised via LLM |
-| Application version lifecycle | Not Started | `createApplicationVersion` identified; depends on Gemma 4 mutation capability being resolved |
-| Credit-card metadata/data integration | Not Started | Depends on metadata schema being provided |
 
 ---
 

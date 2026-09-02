@@ -1,10 +1,11 @@
 import json
-from .config import load_config
+from .config import AppConfig, load_config
 from .llm_service import LLMService
 from .logger import get_logger
-from .mcp_client import connect, discover_tools, execute_tool
+from .mcp_client import connect_all, discover_tools, execute_tool
 from .prompts import build_error_context, build_system_prompt
-from .tool_converter import convert_all_tools, extract_tool_names
+from .tool_converter import extract_tool_names
+from .tool_selector import select_relevant_tools
 
 log = get_logger("agent")
 
@@ -13,22 +14,27 @@ async def _handle_tool_calls(
     session,
     llm: LLMService,
     tool_calls,
-) -> None:
+) -> set[str]:
     """Process tool calls from the LLM response.
 
     Executes each tool via MCP and feeds results back to the LLM.
 
     Args:
-        session: The MCP ClientSession.
+        session: The MCP session manager.
         llm: The LLM service instance.
         tool_calls: The tool calls from the LLM response.
+
+    Returns:
+        Set of tool names executed in this step.
     """
+    executed_tools = set()
     for tool_call in tool_calls:
         tool_name = tool_call.function.name
         arguments = tool_call.function.arguments
 
         log.info("Tool requested: %s", tool_name)
         log.debug("Arguments: %s", json.dumps(arguments))
+        executed_tools.add(tool_name)
 
         # Execute via MCP
         result = await execute_tool(
@@ -48,11 +54,14 @@ async def _handle_tool_calls(
         else:
             llm.add_tool_result(tool_name, result)
 
+    return executed_tools
+
 
 async def _agent_loop(
     session,
     llm: LLMService,
-    ollama_tools: list[dict],
+    all_mcp_tools: list,
+    config: AppConfig,
 ) -> None:
     """The main interactive agent loop.
 
@@ -60,9 +69,10 @@ async def _agent_loop(
     and prints responses until the user exits.
 
     Args:
-        session: The MCP ClientSession.
+        session: The MCP session manager.
         llm: The LLM service instance.
-        ollama_tools: Ollama-formatted tool definitions.
+        all_mcp_tools: Full list of discovered MCP tool objects.
+        config: Application configuration.
     """
     print(
         "\n╔══════════════════════════════════════════╗"
@@ -70,6 +80,8 @@ async def _agent_loop(
         "\n║    Type 'exit' or 'quit' to stop.        ║"
         "\n╚══════════════════════════════════════════╝\n"
     )
+
+    history_tool_names: set[str] = set()
 
     while True:
         try:
@@ -89,6 +101,14 @@ async def _agent_loop(
 
         # Inner loop: handle multi-step tool calls
         while True:
+            # Dynamic Tool Selection Optimization Layer
+            ollama_tools, _ = select_relevant_tools(
+                all_tools=all_mcp_tools,
+                user_query=user_input,
+                max_tools=config.max_tools_per_query,
+                history_tool_names=history_tool_names,
+            )
+
             try:
                 response = await llm.chat(tools=ollama_tools)
             except Exception as e:
@@ -111,32 +131,31 @@ async def _agent_loop(
             # LLM requested tool calls
             llm.add_assistant_message(response.message)
 
-            await _handle_tool_calls(
+            executed = await _handle_tool_calls(
                 session, llm, response.message.tool_calls
             )
+            history_tool_names.update(executed)
 
 
 async def run_agent() -> None:
     """Entry point — wire everything together and start the agent.
 
-    Loads config, connects to MCP, initializes the LLM, and
+    Loads config, connects to MCP servers, initializes the LLM, and
     runs the interactive agent loop.
     """
     # Load configuration
     config = load_config()
 
-    # Connect to MCP and run agent
-    async with connect(config.mcp) as session:
+    # Connect to MCP servers and run agent
+    async with connect_all(config.mcp) as session:
 
-        # Discover tools
+        # Discover tools across all servers
         mcp_tools = await discover_tools(session)
-        ollama_tools = convert_all_tools(mcp_tools)
         tool_names = extract_tool_names(mcp_tools)
 
-        # Log discovered tools
-        log.info("Tools available to the model:")
-        for i, name in enumerate(tool_names, start=1):
-            log.info("  %d. %s", i, name)
+        # Log discovered tools summary
+        log.info("Total %d MCP tools available across servers", len(tool_names))
+        log.info("Dynamic Tool Selection Optimization Layer active (max %d tools per query)", config.max_tools_per_query)
 
         # Initialize LLM with system prompt
         llm = LLMService(
@@ -148,4 +167,5 @@ async def run_agent() -> None:
         llm.set_system_prompt(system_prompt)
 
         # Run the interactive loop
-        await _agent_loop(session, llm, ollama_tools)
+        await _agent_loop(session, llm, mcp_tools, config)
+

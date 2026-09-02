@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EventFlow Assistant — Backstage Demo</title>
+<style>
+:root{--nav:#102a43;--ink:#17324d;--muted:#627d98;--line:#d9e2ec;--green:#47b889;--bg:#f5f8fb;--card:#fff}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{height:64px;background:var(--nav);color:#fff;display:flex;align-items:center;padding:0 28px;gap:20px}.brand{font-size:22px;font-weight:750}.crumb{opacity:.75;font-size:14px}.status{margin-left:auto;font-size:13px;padding:7px 11px;border:1px solid #58748d;border-radius:20px}
+.layout{display:grid;grid-template-columns:235px 1fr;min-height:calc(100vh - 64px)}aside{background:#fff;border-right:1px solid var(--line);padding:18px}.navitem{padding:11px 12px;border-radius:8px;margin:5px 0}.navitem.active{background:#ecfff4;border-left:4px solid var(--green);font-weight:700}
+main{padding:28px;max-width:1300px;width:100%;margin:auto}.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-end}h1{margin:0;font-size:32px}.sub{color:var(--muted);margin-top:8px}.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:20px;margin-top:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(16,42,67,.05);padding:20px}.card h2{font-size:18px;margin:0 0 14px}.chat{min-height:410px;max-height:470px;overflow:auto;padding-right:5px}.msg{max-width:88%;padding:13px 15px;border-radius:12px;margin:10px 0;line-height:1.45}.user{margin-left:auto;background:#dff7ea}.assistant{background:#edf2f7}.tool{background:#f7fbff;border:1px dashed #9fb3c8;font-family:ui-monospace,Consolas,monospace;font-size:13px;white-space:pre-wrap;word-break:break-all}.composer{display:flex;gap:10px;margin-top:14px}.composer input{flex:1;padding:13px;border:1px solid #b8c7d5;border-radius:8px;font-size:14px}
+button{border:0;border-radius:8px;padding:12px 15px;background:var(--nav);color:#fff;font-weight:700;cursor:pointer}button:disabled{opacity:0.6;cursor:not-allowed}button.secondary{background:#fff;color:var(--ink);border:1px solid #9fb3c8}.examples button{width:100%;text-align:left;margin:6px 0;background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500;transition:all 0.15s ease-in-out}.examples button:hover{background:#f0f4f8;border-color:#b8c7d5}.pill{display:inline-block;border-radius:20px;padding:5px 9px;font-size:12px;background:#e6ffef;color:#17633b}.detail{font-size:14px;line-height:1.6}.detail dt{font-weight:700}.detail dd{margin:0 0 9px;color:var(--muted)}.confirm{border:1px solid #f0c36a;background:#fffaf0;border-radius:10px;padding:14px;margin-top:10px}.confirm-actions{display:flex;gap:8px;margin-top:12px}footer{color:var(--muted);font-size:12px;margin-top:18px}@media(max-width:850px){.layout{grid-template-columns:1fr}aside{display:none}.grid{grid-template-columns:1fr}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,0.1);border-left-color:#102a43;border-radius:50%;animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header><div class="brand">Backstage</div><div class="crumb">/ EventFlow Assistant</div><div class="status" id="statusIndicator">MCP connected · Live Mode</div></header>
+<div class="layout">
+<aside><div class="navitem">Home</div><div class="navitem">Catalog</div><div class="navitem active">EventFlow Assistant</div><div class="navitem">APIs</div><div class="navitem">Docs</div></aside>
+<main>
+<div class="hero"><div><h1>EventFlow Assistant</h1><div class="sub">Manage Event Portal & Solace Broker artifacts using natural language.</div></div><span class="pill">Gemma 4 + Solace MCP</span></div>
+<div class="grid">
+<section class="card"><h2>Support Assistant</h2><div class="chat" id="chat"><div class="msg assistant">Hello. I am connected to your Solace Event Portal and Solace PubSub+ Broker via MCP. Ask me to list application domains, inspect message queues, or query event artifacts.</div></div><div class="composer"><input id="prompt" aria-label="Prompt" placeholder="Ask about Event Portal or Broker artifacts…"><button id="sendBtn" onclick="sendPrompt()">Send</button></div></section>
+<section><div class="card examples"><h2>Prompt scenarios</h2>
+<button onclick="runPrompt('Show me all application domains')">Show all application domains</button>
+<button onclick="runPrompt('Show message queues on the broker')">Show message queues on broker</button>
+<button onclick="runPrompt('Query applications in Commerce domain')">Query applications in Commerce domain</button>
+<button onclick="runPrompt('Create an event named PaymentAuthorized in Commerce domain')">Create PaymentAuthorized event</button>
+</div><div class="card" style="margin-top:20px"><h2>Execution context</h2><dl class="detail"><dt>User role</dt><dd>Enterprise Event Architect</dd><dt>Model</dt><dd>Gemma 4 (Ollama local)</dd><dt>Tool gateway</dt><dd>Multi-Server Solace MCP Gateway</dd><dt>Optimizations</dt><dd>Dynamic Tool Selection Optimization Layer</dd></dl></div></section>
+</div>
+<footer>EventFlow Assistant powered by Solace Model Context Protocol (MCP).</footer>
+</main></div>
+<script>
+const chat = document.getElementById('chat'), promptBox = document.getElementById('prompt'), sendBtn = document.getElementById('sendBtn');
+
+function addMsg(htmlContent, cls) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.innerHTML = htmlContent;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  let escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Bold
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  // Inline Code
+  escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Newlines
+  escaped = escaped.replace(/\n/g, '<br>');
+  return escaped;
+}
+
+function runPrompt(text) {
+  promptBox.value = text;
+  sendPrompt();
+}
+
+async function sendPrompt() {
+  const text = promptBox.value.strip ? promptBox.value.strip() : promptBox.value.trim();
+  if (!text) return;
+
+  addMsg(formatMarkdown(text), 'user');
+  promptBox.value = '';
+  promptBox.disabled = true;
+  sendBtn.disabled = true;
+
+  const loadingElem = addMsg('<div class="spinner"></div> <i>Thinking & executing MCP tools...</i>', 'assistant');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    });
+
+    const data = await res.json();
+    loadingElem.remove();
+
+    if (data.tool_calls && data.tool_calls.length > 0) {
+      for (const tc of data.tool_calls) {
+        const argsStr = JSON.stringify(tc.arguments || {});
+        addMsg(`⚙️ <b>MCP Tool Call:</b> <code>${tc.name}(${argsStr})</code>`, 'tool');
+      }
+    }
+
+    if (data.error) {
+      addMsg(`❌ <b>Error:</b> ${formatMarkdown(data.error)}`, 'assistant');
+    } else if (data.content) {
+      addMsg(formatMarkdown(data.content), 'assistant');
+    } else {
+      addMsg('Completed.', 'assistant');
+    }
+
+  } catch (err) {
+    loadingElem.remove();
+    addMsg(`❌ <b>Connection Error:</b> Could not reach backend server (${err.message})`, 'assistant');
+  } finally {
+    promptBox.disabled = false;
+    sendBtn.disabled = false;
+    promptBox.focus();
+  }
+}
+
+promptBox.addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendPrompt();
+});
+</script>
+</body></html>
